@@ -35,7 +35,7 @@ void DBScanNode::cloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr m
 {
     geometry_msgs::msg::TransformStamped transform;
     try {
-        transform = tf_buffer_.lookupTransform("base_link", msg->header.frame_id, tf2::TimePointZero);
+        transform = tf_buffer_.lookupTransform("base_link", msg->header.frame_id, msg->header.stamp,rclcpp::Duration::from_seconds(0.1));
     } catch (tf2::TransformException &ex) {
         RCLCPP_WARN(this->get_logger(), "Could not transform: %s", ex.what());
         return;
@@ -44,6 +44,7 @@ void DBScanNode::cloud_callback(const sensor_msgs::msg::PointCloud2::SharedPtr m
     tf2::doTransform(*msg, transformed_cloud, transform);
     auto transformed_cloud_ptr = std::make_shared<sensor_msgs::msg::PointCloud2>(transformed_cloud);
     std::vector<Point> points = extractPointsFromCloud(transformed_cloud_ptr);
+    RCLCPP_INFO(this->get_logger(), "point cloud %d", points.size());
     dbscan(points);
     publishClusters(points);
 }
@@ -60,7 +61,7 @@ std::vector<Point> DBScanNode::extractPointsFromCloud(const sensor_msgs::msg::Po
         if (std::isnan(*iter_x) || std::isnan(*iter_y) || std::isnan(*iter_z))
         {
             continue;
-        }else if (*iter_x < 20.0 && *iter_y < 20.0 && *iter_z < 20.0)
+        }else if (*iter_x > 3.0 || *iter_y > 3.0)
         {
             continue;
         }
@@ -89,7 +90,7 @@ void DBScanNode::dbscan(std::vector<Point> &points)
             points[i].cluster_id = 0; 
             continue;
         }
-        expandCluster(points,cluster_id,neighbors);
+        //expandCluster(points,cluster_id,neighbors);
         cluster_id++;
     }
 }
@@ -115,15 +116,17 @@ void DBScanNode::expandCluster(std::vector<Point> &points, int &cluster_id, std:
 
         for (size_t i = 0; i < points.size(); ++i)
         {
+            if (points[i].cluster_id <= 0 ) {
+                continue;
+            }
+            
             bool found = std::find(neighbors.begin(), neighbors.end(),i) != neighbors.end();
             if (found) {
                 points[i].cluster_id = cluster_id;
                 continue;
             }
-            else if (points[i].cluster_id != -1 ) {
-                continue;
-            }
-            if (i != static_cast<std::size_t>(neighbor) && distance(points[neighbor], points[i]) <= epsilon_)
+            
+            if (distance(points[neighbor], points[i]) <= epsilon_)
             {
                 //ノイズ判定なくていい？
 
