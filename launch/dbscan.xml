@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="dbscan_segmentation" exec="dbscan_seg_node">
+    </node>
+</launch>
